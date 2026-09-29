@@ -132,9 +132,7 @@ jobs:
           echo 'client.interactionManager.attackEntity(client.player, crystal);' >> src/main/java/com/rv/client/modules/CrystalAura.java
           echo 'client.player.swingHand(Hand.MAIN_HAND);' >> src/main/java/com/rv/client/modules/CrystalAura.java
           echo 'delay = 1; return;' >> src/main/java/com/rv/client/modules/CrystalAura.java
-          echo '}}}}' >> src/main/java/com/rv/client/modules/CrystalAura.java
-          echo '}' >> src/main/java/com/rv/client/modules/CrystalAura.java
-          echo '}' >> src/main/java/com/rv/client/modules/CrystalAura.java
+          echo '}}}}}' >> src/main/java/com/rv/client/modules/CrystalAura.java
       - name: Write AnchorAura.java
         run: |
           echo 'package com.rv.client.modules;' > src/main/java/com/rv/client/modules/AnchorAura.java
