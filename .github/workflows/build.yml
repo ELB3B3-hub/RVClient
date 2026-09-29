@@ -9,6 +9,10 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.6'
       - name: Setup project
         run: |
           mkdir -p src/main/resources
@@ -24,7 +28,7 @@ jobs:
           echo 'org.gradle.jvmargs=-Xmx2G' > gradle.properties
       - name: Write build.gradle
         run: |
-          echo 'plugins { id "fabric-loom" version "1.7-SNAPSHOT" }
+          echo 'plugins { id "fabric-loom" version "1.5-SNAPSHOT"; id "java" }
           version = "0.100.0"
           group = "com.rv"
           dependencies {
@@ -33,7 +37,7 @@ jobs:
             modImplementation "net.fabricmc:fabric-loader:0.19.13"
             modImplementation "net.fabricmc.fabric-api:fabric-api:0.114.0+1.21.1"
           }
-          java { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaVersion.VERSION_21 }
+          java { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaVersion.VERSION_21; toolchain { languageVersion = JavaLanguageVersion.of(21) } }
           processResources { inputs.property "version", project.version; filesMatching("fabric.mod.json") { expand "version": project.version } }
           jar { archiveBaseName = "fabric-api-base"; archiveVersion = "0.100.0" }' > build.gradle
       - name: Write fabric.mod.json
@@ -257,7 +261,7 @@ jobs:
           echo '@Override public void onTick(MinecraftClient client) {}' >> src/main/java/com/rv/client/modules/AutoMiss.java
           echo '}' >> src/main/java/com/rv/client/modules/AutoMiss.java
       - name: Build
-        run: gradle build --no-daemon
+        run: gradle build --no-daemon --no-build-cache
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
