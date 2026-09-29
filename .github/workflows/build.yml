@@ -158,7 +158,7 @@ jobs:
           echo 'public AnchorAura() { super("Anchor"); }' >> src/main/java/com/rv/client/modules/AnchorAura.java
           echo '@Override public void onTick(MinecraftClient client) {' >> src/main/java/com/rv/client/modules/AnchorAura.java
           echo 'if (client.player == null || client.world == null || client.interactionManager == null) return;' >> src/main/java/com/rv/client/modules/AnchorAura.java
-          echo 'if (client.currentScreen != null) return;' >> src.main/java/com/rv/client/modules/AnchorAura.java
+          echo 'if (client.currentScreen != null) return;' >> src/main/java/com/rv/client/modules/AnchorAura.java
           echo 'if (delay > 0) { delay--; return; }' >> src/main/java/com/rv/client/modules/AnchorAura.java
           echo 'if (client.world.getRegistryKey() == World.NETHER) return;' >> src/main/java/com/rv/client/modules/AnchorAura.java
           echo 'switch (phase) {' >> src/main/java/com/rv/client/modules/AnchorAura.java
