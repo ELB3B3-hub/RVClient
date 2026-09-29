@@ -9,419 +9,334 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-      - name: Create settings.gradle
-        run: echo 'pluginManagement {
-            repositories {
-                maven { url = "https://maven.fabricmc.net/" }
-                mavenCentral()
-                gradlePluginPortal()
-            }
-        }
-        rootProject.name = "RVClient"' > settings.gradle
-      - name: Create gradle.properties
-        run: echo 'org.gradle.jvmargs=-Xmx2G' > gradle.properties
-      - name: Create build.gradle
-        run: |
-          cat > build.gradle << 'GEOF'
-          plugins {
-              id 'fabric-loom' version '1.7-SNAPSHOT'
-          }
-          version = "0.100.0"
-          group = "com.rv"
-          dependencies {
-              minecraft "com.mojang:minecraft:1.21.1"
-              mappings "net.fabricmc:yarn:1.21.1+build.3:v2"
-              modImplementation "net.fabricmc:fabric-loader:0.19.13"
-              modImplementation "net.fabricmc.fabric-api:fabric-api:0.114.0+1.21.1"
-          }
-          java {
-              sourceCompatibility = JavaVersion.VERSION_21
-              targetCompatibility = JavaVersion.VERSION_21
-          }
-          processResources {
-              inputs.property "version", project.version
-              filesMatching("fabric.mod.json") {
-                  expand "version": project.version
-              }
-          }
-          jar {
-              archiveBaseName = "fabric-api-base"
-              archiveVersion = "0.100.0"
-          }
-          GEOF
-      - name: Create fabric.mod.json
+      - name: Setup project
         run: |
           mkdir -p src/main/resources
-          cat > src/main/resources/fabric.mod.json << 'FEOF'
-          {
-            "schemaVersion": 1,
-            "id": "fabric-api-base",
-            "version": "0.100.0",
-            "name": "Fabric API Base",
-            "description": "Core Fabric API module - DO NOT REMOVE",
-            "authors": ["FabricMC"],
-            "entrypoints": {
-              "client": ["com.rv.client.RVClient"]
-            },
-            "depends": {
-              "fabricloader": ">=0.19.13",
-              "fabric-api": "*",
-              "minecraft": "1.21.1",
-              "java": ">=21"
-            }
-          }
-          FEOF
-      - name: Create Java files
-        run: |
           mkdir -p src/main/java/com/rv/client/modules
           
-          cat > src/main/java/com/rv/client/RVClient.java << 'J1EOF'
-          package com.rv.client;
+          printf 'pluginManagement {\n  repositories {\n    maven { url = "https://maven.fabricmc.net/" }\n    mavenCentral()\n    gradlePluginPortal()\n  }\n}\nrootProject.name = "RVClient"\n' > settings.gradle
           
-          import net.fabricmc.api.ClientModInitializer;
-          import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-          import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-          import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-          import com.rv.client.modules.*;
+          printf 'org.gradle.jvmargs=-Xmx2G\n' > gradle.properties
           
-          public class RVClient implements ClientModInitializer {
-              public static CrystalAura crystalAura = new CrystalAura();
-              public static AnchorAura anchorAura = new AnchorAura();
-              public static AutoTotem autoTotem = new AutoTotem();
-              public static AutoMiss autoMiss = new AutoMiss();
+          printf 'plugins {\n  id '"'"'fabric-loom'"'"' version '"'"'1.7-SNAPSHOT'"'"'\n}\nversion = "0.100.0"\ngroup = "com.rv"\ndependencies {\n  minecraft "com.mojang:minecraft:1.21.1"\n  mappings "net.fabricmc:yarn:1.21.1+build.3:v2"\n  modImplementation "net.fabricmc:fabric-loader:0.19.13"\n  modImplementation "net.fabricmc.fabric-api:fabric-api:0.114.0+1.21.1"\n}\njava {\n  sourceCompatibility = JavaVersion.VERSION_21\n  targetCompatibility = JavaVersion.VERSION_21\n}\nprocessResources {\n  inputs.property "version", project.version\n  filesMatching("fabric.mod.json") {\n    expand "version": project.version\n  }\n}\njar {\n  archiveBaseName = "fabric-api-base"\n  archiveVersion = "0.100.0"\n}\n' > build.gradle
           
-              @Override
-              public void onInitializeClient() {
-                  ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-                      dispatcher.register(ClientCommandManager.literal("crystal")
-                          .executes(context -> { crystalAura.toggle(); return 1; }));
-                      dispatcher.register(ClientCommandManager.literal("anchor")
-                          .executes(context -> { anchorAura.toggle(); return 1; }));
-                      dispatcher.register(ClientCommandManager.literal("totem")
-                          .executes(context -> { autoTotem.toggle(); return 1; }));
-                      dispatcher.register(ClientCommandManager.literal("miss")
-                          .executes(context -> { autoMiss.toggle(); return 1; }));
-                  });
-          
-                  ClientTickEvents.END_CLIENT_TICK.register(client -> {
-                      if (crystalAura.isEnabled()) crystalAura.onTick(client);
-                      if (anchorAura.isEnabled()) anchorAura.onTick(client);
-                      if (autoTotem.isEnabled()) autoTotem.onTick(client);
-                  });
-              }
-          }
-          J1EOF
-          
-          cat > src/main/java/com/rv/client/modules/Module.java << 'J2EOF'
-          package com.rv.client.modules;
-          
-          import net.minecraft.client.MinecraftClient;
-          import net.minecraft.item.Item;
-          import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
-          
-          public abstract class Module {
-              private boolean enabled = false;
-              private final String name;
-          
-              public Module(String name) { this.name = name; }
-              public void toggle() { enabled = !enabled; }
-              public boolean isEnabled() { return enabled; }
-              public String getName() { return name; }
-              public abstract void onTick(MinecraftClient client);
-          
-              protected int findItem(MinecraftClient client, Item item) {
-                  for (int i = 0; i < 9; i++) {
-                      if (!client.player.getInventory().getStack(i).isEmpty() &&
-                          client.player.getInventory().getStack(i).getItem() == item) {
-                          return i;
-                      }
-                  }
-                  return -1;
-              }
-          
-              protected void switchSlot(MinecraftClient client, int slot) {
-                  client.player.getInventory().selectedSlot = slot;
-                  client.player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(slot));
-              }
-          }
-          J2EOF
-          
-          cat > src/main/java/com/rv/client/modules/CrystalAura.java << 'J3EOF'
-          package com.rv.client.modules;
-          
-          import net.minecraft.client.MinecraftClient;
-          import net.minecraft.entity.Entity;
-          import net.minecraft.entity.LivingEntity;
-          import net.minecraft.entity.decoration.EndCrystalEntity;
-          import net.minecraft.entity.player.PlayerEntity;
-          import net.minecraft.entity.mob.HostileEntity;
-          import net.minecraft.util.Hand;
-          import java.util.ArrayList;
-          import java.util.List;
-          
-          public class CrystalAura extends Module {
-              private int delay = 0;
-              private final double breakRange = 6.0;
-              private final double targetRange = 12.0;
-          
-              public CrystalAura() { super("Crystal"); }
-          
-              @Override
-              public void onTick(MinecraftClient client) {
-                  if (client.player == null || client.world == null || client.interactionManager == null) return;
-                  if (client.currentScreen != null) return;
-                  if (delay > 0) { delay--; return; }
-          
-                  List<EndCrystalEntity> crystals = new ArrayList<>();
-                  List<LivingEntity> enemies = new ArrayList<>();
-          
-                  for (Entity entity : client.world.getEntities()) {
-                      if (entity instanceof EndCrystalEntity) {
-                          if (entity.squaredDistanceTo(client.player) <= breakRange * breakRange) {
-                              crystals.add((EndCrystalEntity) entity);
-                          }
-                      } else if (entity instanceof LivingEntity && entity != client.player && ((LivingEntity) entity).isAlive()) {
-                          if ((entity instanceof PlayerEntity || entity instanceof HostileEntity) &&
-                              entity.squaredDistanceTo(client.player) <= targetRange * targetRange) {
-                              enemies.add((LivingEntity) entity);
-                          }
-                      }
-                  }
-          
-                  if (crystals.isEmpty() || enemies.isEmpty()) return;
-          
-                  for (EndCrystalEntity crystal : crystals) {
-                      for (LivingEntity enemy : enemies) {
-                          if (crystal.squaredDistanceTo(enemy) < 12.0) {
-                              if (com.rv.client.RVClient.autoMiss.isEnabled() && com.rv.client.RVClient.autoMiss.shouldMiss()) {
-                                  delay = 1;
-                                  return;
-                              }
-                              client.interactionManager.attackEntity(client.player, crystal);
-                              client.player.swingHand(Hand.MAIN_HAND);
-                              delay = 1;
-                              return;
-                          }
-                      }
-                  }
-              }
-          }
-          J3EOF
-          
-          cat > src/main/java/com/rv/client/modules/AnchorAura.java << 'J4EOF'
-          package com.rv.client.modules;
-          
-          import net.minecraft.client.MinecraftClient;
-          import net.minecraft.entity.Entity;
-          import net.minecraft.entity.LivingEntity;
-          import net.minecraft.entity.player.PlayerEntity;
-          import net.minecraft.entity.mob.HostileEntity;
-          import net.minecraft.block.Blocks;
-          import net.minecraft.block.BlockState;
-          import net.minecraft.item.Items;
-          import net.minecraft.util.math.BlockPos;
-          import net.minecraft.util.math.Direction;
-          import net.minecraft.util.math.Vec3d;
-          import net.minecraft.util.Hand;
-          import net.minecraft.util.hit.BlockHitResult;
-          import net.minecraft.world.World;
-          
-          public class AnchorAura extends Module {
-              private int delay = 0;
-              private int phase = 0;
-              private BlockPos anchorPos = null;
-              private final double placeRange = 5.0;
-              private final double targetRange = 8.0;
-          
-              public AnchorAura() { super("Anchor"); }
-          
-              @Override
-              public void onTick(MinecraftClient client) {
-                  if (client.player == null || client.world == null || client.interactionManager == null) return;
-                  if (client.currentScreen != null) return;
-                  if (delay > 0) { delay--; return; }
-                  if (client.world.getRegistryKey() == World.NETHER) return;
-          
-                  switch (phase) {
-                      case 0: {
-                          LivingEntity target = findTarget(client);
-                          if (target == null) return;
-                          BlockPos pos = findValidPos(client, target);
-                          if (pos == null) return;
-                          int anchorSlot = findItem(client, Items.RESPAWN_ANCHOR);
-                          if (anchorSlot == -1) return;
-                          switchSlot(client, anchorSlot);
-                          if (com.rv.client.RVClient.autoMiss.isEnabled() && com.rv.client.RVClient.autoMiss.shouldMiss()) {
-                              delay = 2;
-                              return;
-                          }
-                          Vec3d hitVec = new Vec3d(pos.down().getX() + 0.5, pos.down().getY() + 1.0, pos.down().getZ() + 0.5);
-                          BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, pos.down(), false);
-                          client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
-                          client.player.swingHand(Hand.MAIN_HAND);
-                          anchorPos = pos;
-                          phase = 1;
-                          delay = 1;
-                          break;
-                      }
-                      case 1: {
-                          if (anchorPos == null) { phase = 0; return; }
-                          BlockState bs = client.world.getBlockState(anchorPos);
-                          if (bs.getBlock() != Blocks.RESPAWN_ANCHOR) { phase = 0; return; }
-                          int glowSlot = findItem(client, Items.GLOWSTONE);
-                          if (glowSlot == -1) { phase = 0; return; }
-                          switchSlot(client, glowSlot);
-                          Vec3d hitVec = Vec3d.ofCenter(anchorPos);
-                          BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, anchorPos, false);
-                          client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
-                          client.player.swingHand(Hand.MAIN_HAND);
-                          phase = 2;
-                          delay = 2;
-                          break;
-                      }
-                      case 2: {
-                          LivingEntity target = findTarget(client);
-                          if (target == null) { phase = 0; return; }
-                          BlockPos pos = findValidPos(client, target);
-                          if (pos == null) { phase = 0; return; }
-                          int anchorSlot = findItem(client, Items.RESPAWN_ANCHOR);
-                          if (anchorSlot == -1) { phase = 0; return; }
-                          switchSlot(client, anchorSlot);
-                          Vec3d hitVec = new Vec3d(pos.down().getX() + 0.5, pos.down().getY() + 1.0, pos.down().getZ() + 0.5);
-                          BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, pos.down(), false);
-                          client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
-                          client.player.swingHand(Hand.MAIN_HAND);
-                          anchorPos = pos;
-                          phase = 3;
-                          delay = 1;
-                          break;
-                      }
-                      case 3: {
-                          if (anchorPos == null) { phase = 0; return; }
-                          BlockState bs = client.world.getBlockState(anchorPos);
-                          if (bs.getBlock() != Blocks.RESPAWN_ANCHOR) { phase = 0; return; }
-                          int glowSlot = findItem(client, Items.GLOWSTONE);
-                          if (glowSlot == -1) { phase = 0; return; }
-                          switchSlot(client, glowSlot);
-                          Vec3d hitVec = Vec3d.ofCenter(anchorPos);
-                          BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, anchorPos, false);
-                          client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
-                          client.player.swingHand(Hand.MAIN_HAND);
-                          phase = 0;
-                          delay = 5;
-                          break;
-                      }
-                  }
-              }
-          
-              private LivingEntity findTarget(MinecraftClient client) {
-                  LivingEntity target = null;
-                  double bestDist = targetRange * targetRange;
-                  for (Entity entity : client.world.getEntities()) {
-                      if (entity instanceof LivingEntity && entity != client.player && ((LivingEntity) entity).isAlive()) {
-                          if (entity instanceof PlayerEntity || entity instanceof HostileEntity) {
-                              double d = entity.squaredDistanceTo(client.player);
-                              if (d < bestDist) { bestDist = d; target = (LivingEntity) entity; }
-                          }
-                      }
-                  }
-                  return target;
-              }
-          
-              private BlockPos findValidPos(MinecraftClient client, LivingEntity target) {
-                  BlockPos targetPos = target.getBlockPos();
-                  BlockPos best = null;
-                  double bestD = Double.MAX_VALUE;
-                  for (int x = -2; x <= 2; x++) {
-                      for (int y = -1; y <= 1; y++) {
-                          for (int z = -2; z <= 2; z++) {
-                              BlockPos pos = targetPos.add(x, y, z);
-                              if (client.player.squaredDistanceTo(Vec3d.ofCenter(pos)) > placeRange * placeRange) continue;
-                              BlockState below = client.world.getBlockState(pos.down());
-                              if (!below.isSolidBlock(client.world, pos.down())) continue;
-                              if (!client.world.getBlockState(pos).isAir()) continue;
-                              double d = Vec3d.ofCenter(pos).squaredDistanceTo(target.getPos());
-                              if (d < bestD) { bestD = d; best = pos; }
-                          }
-                      }
-                  }
-                  return best;
-              }
-          }
-          J4EOF
-          
-          cat > src/main/java/com/rv/client/modules/AutoTotem.java << 'J5EOF'
-          package com.rv.client.modules;
-          
-          import net.minecraft.client.MinecraftClient;
-          import net.minecraft.item.Items;
-          import net.minecraft.item.ItemStack;
-          import net.minecraft.screen.slot.SlotActionType;
-          
-          public class AutoTotem extends Module {
-              private int delay = 0;
-          
-              public AutoTotem() { super("AutoTotem"); }
-          
-              @Override
-              public void onTick(MinecraftClient client) {
-                  if (client.player == null || client.interactionManager == null) return;
-                  if (client.currentScreen != null) return;
-                  if (delay > 0) { delay--; return; }
-          
-                  ItemStack offhand = client.player.getOffHandStack();
-                  if (offhand.getItem() == Items.TOTEM_OF_UNDYING) return;
-          
-                  int totemSlot = -1;
-                  for (int i = 0; i < client.player.getInventory().size(); i++) {
-                      if (client.player.getInventory().getStack(i).getItem() == Items.TOTEM_OF_UNDYING) {
-                          totemSlot = i;
-                          break;
-                      }
-                  }
-          
-                  if (totemSlot == -1) return;
-          
-                  int screenSlot;
-                  if (totemSlot < 9) {
-                      screenSlot = totemSlot + 36;
-                  } else {
-                      screenSlot = totemSlot;
-                  }
-          
-                  int syncId = client.player.playerScreenHandler.syncId;
-                  client.interactionManager.clickSlot(syncId, screenSlot, 0, SlotActionType.PICKUP, client.player);
-                  client.interactionManager.clickSlot(syncId, 45, 0, SlotActionType.PICKUP, client.player);
-                  client.interactionManager.clickSlot(syncId, screenSlot, 0, SlotActionType.PICKUP, client.player);
-          
-                  delay = 5;
-              }
-          }
-          J5EOF
-          
-          cat > src/main/java/com/rv/client/modules/AutoMiss.java << 'J6EOF'
-          package com.rv.client.modules;
-          
-          import net.minecraft.client.MinecraftClient;
-          
-          public class AutoMiss extends Module {
-              private final double missChance = 0.15;
-          
-              public AutoMiss() { super("AutoMiss"); }
-          
-              public boolean shouldMiss() {
-                  return Math.random() < missChance;
-              }
-          
-              @Override
-              public void onTick(MinecraftClient client) {
-              }
-          }
-          J6EOF
-      - name: Build
-        run: gradle build --no-daemon
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          printf '{\n  "schemaVersion": 1,\n  "id": "fabric-api-base",\n  "version": "0.100.0",\n  "name": "Fabric API Base",\n  "description": "Core Fabric API module - DO NOT REMOVE",\n  "authors": ["FabricMC"],\n  "entrypoints": {\n    "client": ["com.rv.client.RVClient"]\n  },\n  "depends": {\n    "fabricloader": ">=0.19.13",\n    "fabric-api": "*",\n    "minecraft": "1.21.1",\n    "java": ">=21"\n  }\n}\n' > src/main/resources/fabric.mod.json
+
+      - name: Write Java files
+        uses: actions/github-script@v7
         with:
-          name: fabric-api-base
-          path: build/libs/*.jar
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            const base = 'src/main/java/com/rv/client';
+            
+            const rv = `package com.rv.client;
+            
+            import net.fabricmc.api.ClientModInitializer;
+            import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+            import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+            import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+            import com.rv.client.modules.*;
+            
+            public class RVClient implements ClientModInitializer {
+                public static CrystalAura crystalAura = new CrystalAura();
+                public static AnchorAura anchorAura = new AnchorAura();
+                public static AutoTotem autoTotem = new AutoTotem();
+                public static AutoMiss autoMiss = new AutoMiss();
+            
+                @Override
+                public void onInitializeClient() {
+                    ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+                        dispatcher.register(ClientCommandManager.literal("crystal")
+                            .executes(context -> { crystalAura.toggle(); return 1; }));
+                        dispatcher.register(ClientCommandManager.literal("anchor")
+                            .executes(context -> { anchorAura.toggle(); return 1; }));
+                        dispatcher.register(ClientCommandManager.literal("totem")
+                            .executes(context -> { autoTotem.toggle(); return 1; }));
+                        dispatcher.register(ClientCommandManager.literal("miss")
+                            .executes(context -> { autoMiss.toggle(); return 1; }));
+                    });
+            
+                    ClientTickEvents.END_CLIENT_TICK.register(client -> {
+                        if (crystalAura.isEnabled()) crystalAura.onTick(client);
+                        if (anchorAura.isEnabled()) anchorAura.onTick(client);
+                        if (autoTotem.isEnabled()) autoTotem.onTick(client);
+                    });
+                }
+            }`;
+            
+            const mod = `package com.rv.client.modules;
+            
+            import net.minecraft.client.MinecraftClient;
+            import net.minecraft.item.Item;
+            import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
+            
+            public abstract class Module {
+                private boolean enabled = false;
+                private final String name;
+            
+                public Module(String name) { this.name = name; }
+                public void toggle() { enabled = !enabled; }
+                public boolean isEnabled() { return enabled; }
+                public String getName() { return name; }
+                public abstract void onTick(MinecraftClient client);
+            
+                protected int findItem(MinecraftClient client, Item item) {
+                    for (int i = 0; i < 9; i++) {
+                        if (!client.player.getInventory().getStack(i).isEmpty() &&
+                            client.player.getInventory().getStack(i).getItem() == item) {
+                            return i;
+                        }
+                    }
+                    return -1;
+                }
+            
+                protected void switchSlot(MinecraftClient client, int slot) {
+                    client.player.getInventory().selectedSlot = slot;
+                    client.player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(slot));
+                }
+            }`;
+            
+            const crystal = `package com.rv.client.modules;
+            
+            import net.minecraft.client.MinecraftClient;
+            import net.minecraft.entity.Entity;
+            import net.minecraft.entity.LivingEntity;
+            import net.minecraft.entity.decoration.EndCrystalEntity;
+            import net.minecraft.entity.player.PlayerEntity;
+            import net.minecraft.entity.mob.HostileEntity;
+            import net.minecraft.util.Hand;
+            import java.util.ArrayList;
+            import java.util.List;
+            
+            public class CrystalAura extends Module {
+                private int delay = 0;
+                private final double breakRange = 6.0;
+                private final double targetRange = 12.0;
+            
+                public CrystalAura() { super("Crystal"); }
+            
+                @Override
+                public void onTick(MinecraftClient client) {
+                    if (client.player == null || client.world == null || client.interactionManager == null) return;
+                    if (client.currentScreen != null) return;
+                    if (delay > 0) { delay--; return; }
+            
+                    List<EndCrystalEntity> crystals = new ArrayList<>();
+                    List<LivingEntity> enemies = new ArrayList<>();
+            
+                    for (Entity entity : client.world.getEntities()) {
+                        if (entity instanceof EndCrystalEntity) {
+                            if (entity.squaredDistanceTo(client.player) <= breakRange * breakRange) {
+                                crystals.add((EndCrystalEntity) entity);
+                            }
+                        } else if (entity instanceof LivingEntity && entity != client.player && ((LivingEntity) entity).isAlive()) {
+                            if ((entity instanceof PlayerEntity || entity instanceof HostileEntity) &&
+                                entity.squaredDistanceTo(client.player) <= targetRange * targetRange) {
+                                enemies.add((LivingEntity) entity);
+                            }
+                        }
+                    }
+            
+                    if (crystals.isEmpty() || enemies.isEmpty()) return;
+            
+                    for (EndCrystalEntity crystal : crystals) {
+                        for (LivingEntity enemy : enemies) {
+                            if (crystal.squaredDistanceTo(enemy) < 12.0) {
+                                if (com.rv.client.RVClient.autoMiss.isEnabled() && com.rv.client.RVClient.autoMiss.shouldMiss()) {
+                                    delay = 1;
+                                    return;
+                                }
+                                client.interactionManager.attackEntity(client.player, crystal);
+                                client.player.swingHand(Hand.MAIN_HAND);
+                                delay = 1;
+                                return;
+                            }
+                        }
+                    }
+                }
+            }`;
+            
+            const anchor = `package com.rv.client.modules;
+            
+            import net.minecraft.client.MinecraftClient;
+            import net.minecraft.entity.Entity;
+            import net.minecraft.entity.LivingEntity;
+            import net.minecraft.entity.player.PlayerEntity;
+            import net.minecraft.entity.mob.HostileEntity;
+            import net.minecraft.block.Blocks;
+            import net.minecraft.block.BlockState;
+            import net.minecraft.item.Items;
+            import net.minecraft.util.math.BlockPos;
+            import net.minecraft.util.math.Direction;
+            import net.minecraft.util.math.Vec3d;
+            import net.minecraft.util.Hand;
+            import net.minecraft.util.hit.BlockHitResult;
+            import net.minecraft.world.World;
+            
+            public class AnchorAura extends Module {
+                private int delay = 0;
+                private int phase = 0;
+                private BlockPos anchorPos = null;
+                private final double placeRange = 5.0;
+                private final double targetRange = 8.0;
+            
+                public AnchorAura() { super("Anchor"); }
+            
+                @Override
+                public void onTick(MinecraftClient client) {
+                    if (client.player == null || client.world == null || client.interactionManager == null) return;
+                    if (client.currentScreen != null) return;
+                    if (delay > 0) { delay--; return; }
+                    if (client.world.getRegistryKey() == World.NETHER) return;
+            
+                    switch (phase) {
+                        case 0: {
+                            LivingEntity target = findTarget(client);
+                            if (target == null) return;
+                            BlockPos pos = findValidPos(client, target);
+                            if (pos == null) return;
+                            int anchorSlot = findItem(client, Items.RESPAWN_ANCHOR);
+                            if (anchorSlot == -1) return;
+                            switchSlot(client, anchorSlot);
+                            if (com.rv.client.RVClient.autoMiss.isEnabled() && com.rv.client.RVClient.autoMiss.shouldMiss()) {
+                                delay = 2;
+                                return;
+                            }
+                            Vec3d hitVec = new Vec3d(pos.down().getX() + 0.5, pos.down().getY() + 1.0, pos.down().getZ() + 0.5);
+                            BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, pos.down(), false);
+                            client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
+                            client.player.swingHand(Hand.MAIN_HAND);
+                            anchorPos = pos;
+                            phase = 1;
+                            delay = 1;
+                            break;
+                        }
+                        case 1: {
+                            if (anchorPos == null) { phase = 0; return; }
+                            BlockState bs = client.world.getBlockState(anchorPos);
+                            if (bs.getBlock() != Blocks.RESPAWN_ANCHOR) { phase = 0; return; }
+                            int glowSlot = findItem(client, Items.GLOWSTONE);
+                            if (glowSlot == -1) { phase = 0; return; }
+                            switchSlot(client, glowSlot);
+                            Vec3d hitVec = Vec3d.ofCenter(anchorPos);
+                            BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, anchorPos, false);
+                            client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
+                            client.player.swingHand(Hand.MAIN_HAND);
+                            phase = 2;
+                            delay = 2;
+                            break;
+                        }
+                        case 2: {
+                            LivingEntity target = findTarget(client);
+                            if (target == null) { phase = 0; return; }
+                            BlockPos pos = findValidPos(client, target);
+                            if (pos == null) { phase = 0; return; }
+                            int anchorSlot = findItem(client, Items.RESPAWN_ANCHOR);
+                            if (anchorSlot == -1) { phase = 0; return; }
+                            switchSlot(client, anchorSlot);
+                            Vec3d hitVec = new Vec3d(pos.down().getX() + 0.5, pos.down().getY() + 1.0, pos.down().getZ() + 0.5);
+                            BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, pos.down(), false);
+                            client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
+                            client.player.swingHand(Hand.MAIN_HAND);
+                            anchorPos = pos;
+                            phase = 3;
+                            delay = 1;
+                            break;
+                        }
+                        case 3: {
+                            if (anchorPos == null) { phase = 0; return; }
+                            BlockState bs = client.world.getBlockState(anchorPos);
+                            if (bs.getBlock() != Blocks.RESPAWN_ANCHOR) { phase = 0; return; }
+                            int glowSlot = findItem(client, Items.GLOWSTONE);
+                            if (glowSlot == -1) { phase = 0; return; }
+                            switchSlot(client, glowSlot);
+                            Vec3d hitVec = Vec3d.ofCenter(anchorPos);
+                            BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, anchorPos, false);
+                            client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
+                            client.player.swingHand(Hand.MAIN_HAND);
+                            phase = 0;
+                            delay = 5;
+                            break;
+                        }
+                    }
+                }
+            
+                private LivingEntity findTarget(MinecraftClient client) {
+                    LivingEntity target = null;
+                    double bestDist = targetRange * targetRange;
+                    for (Entity entity : client.world.getEntities()) {
+                        if (entity instanceof LivingEntity && entity != client.player && ((LivingEntity) entity).isAlive()) {
+                            if (entity instanceof PlayerEntity || entity instanceof HostileEntity) {
+                                double d = entity.squaredDistanceTo(client.player);
+                                if (d < bestDist) { bestDist = d; target = (LivingEntity) entity; }
+                            }
+                        }
+                    }
+                    return target;
+                }
+            
+                private BlockPos findValidPos(MinecraftClient client, LivingEntity target) {
+                    BlockPos targetPos = target.getBlockPos();
+                    BlockPos best = null;
+                    double bestD = Double.MAX_VALUE;
+                    for (int x = -2; x <= 2; x++) {
+                        for (int y = -1; y <= 1; y++) {
+                            for (int z = -2; z <= 2; z++) {
+                                BlockPos pos = targetPos.add(x, y, z);
+                                if (client.player.squaredDistanceTo(Vec3d.ofCenter(pos)) > placeRange * placeRange) continue;
+                                BlockState below = client.world.getBlockState(pos.down());
+                                if (!below.isSolidBlock(client.world, pos.down())) continue;
+                                if (!client.world.getBlockState(pos).isAir()) continue;
+                                double d = Vec3d.ofCenter(pos).squaredDistanceTo(target.getPos());
+                                if (d < bestD) { bestD = d; best = pos; }
+                            }
+                        }
+                    }
+                    return best;
+                }
+            }`;
+            
+            const totem = `package com.rv.client.modules;
+            
+            import net.minecraft.client.MinecraftClient;
+            import net.minecraft.item.Items;
+            import net.minecraft.item.ItemStack;
+            import net.minecraft.screen.slot.SlotActionType;
+            
+            public class AutoTotem extends Module {
+                private int delay = 0;
+            
+                public AutoTotem() { super("AutoTotem"); }
+            
+                @Override
+                public void onTick(MinecraftClient client) {
+                    if (client.player == null || client.interactionManager == null) return;
+                    if (client.currentScreen != null) return;
+                    if (delay > 0) { delay--; return; }
+            
+                    ItemStack offhand = client.player.getOffHandStack();
+                    if (offhand.getItem() == Items.TOTEM_OF_UNDYING) return;
+            
+                    int totemSlot = -1;
+                    for (int i = 0; i < client.player.getInventory().size(); i++) {
+                        if (client.player.getInventory().getStack(i).getItem() == Items.TOTEM_OF_UNDYING) {
+                            totemSlot = i;
+                            break;
+                        }
+                    }
+            
+                    if (totemSlot == -1) return;
+            
+                    int screenSlot;
+                    if (totemSlot < 9) {
+                        screenSlot = totemSlot + 36;
+                    } else {
+                        screenSlot = totemSlot;
+                    }
+            
+                    int syncId = client.player.playerScreenHandler.syncId;
+                    client.interactionManager.clickSlot(syncId, screenSlot, 0, SlotActionType.PICKUP, client.player);
+                    client.interactionManager.clickSlot(syncId, 45, 0, SlotActionType.PICKUP, client.player);
+                    client.interactionManager.clickSlot(syncId, screenSlot,
