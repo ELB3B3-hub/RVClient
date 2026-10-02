@@ -34,7 +34,7 @@ jobs:
           dependencies {
             minecraft "com.mojang:minecraft:1.21.1"
             mappings "net.fabricmc:yarn:1.21.1+build.3:v2"
-            modImplementation "net.fabricmc:fabric-loader:0.16.0"
+            modImplementation "net.fabricmc:fabric-loader:0.19.3"
             modImplementation "net.fabricmc.fabric-api:fabric-api:0.114.0+1.21.1"
           }
           java { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaVersion.VERSION_21; toolchain { languageVersion = JavaLanguageVersion.of(21) } }
@@ -42,7 +42,7 @@ jobs:
           jar { archiveBaseName = "fabric-api-base"; archiveVersion = "0.100.0" }' > build.gradle
       - name: Write fabric.mod.json
         run: |
-          echo '{"schemaVersion":1,"id":"fabric-api-base","version":"0.100.0","name":"Fabric API Base","description":"Core Fabric API module - DO NOT REMOVE","authors":["FabricMC"],"entrypoints":{"client":["com.rv.client.RVClient"]},"depends":{"fabricloader":">=0.16.0","fabric-api":"*","minecraft":">=1.21","java":">=21"}}' > src/main/resources/fabric.mod.json
+          echo '{"schemaVersion":1,"id":"fabric-api-base","version":"0.100.0","name":"Fabric API Base","description":"Core Fabric API module - DO NOT REMOVE","authors":["FabricMC"],"entrypoints":{"client":["com.rv.client.RVClient"]},"depends":{"fabricloader":">=0.19.3","fabric-api":"*","minecraft":">=1.21","java":">=21"}}' > src/main/resources/fabric.mod.json
       - name: Write RVClient.java
         run: |
           echo 'package com.rv.client;' > src/main/java/com/rv/client/RVClient.java
@@ -56,17 +56,20 @@ jobs:
           echo 'public static AnchorAura anchorAura = new AnchorAura();' >> src/main/java/com/rv/client/RVClient.java
           echo 'public static AutoTotem autoTotem = new AutoTotem();' >> src/main/java/com/rv/client/RVClient.java
           echo 'public static AutoMiss autoMiss = new AutoMiss();' >> src/main/java/com/rv/client/RVClient.java
+          echo 'public static TriggerBot triggerBot = new TriggerBot();' >> src/main/java/com/rv/client/RVClient.java
           echo '@Override public void onInitializeClient() {' >> src/main/java/com/rv/client/RVClient.java
           echo 'ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {' >> src/main/java/com/rv/client/RVClient.java
           echo 'dispatcher.register(ClientCommandManager.literal("crystal").executes(context -> { crystalAura.toggle(); return 1; }));' >> src/main/java/com/rv/client/RVClient.java
           echo 'dispatcher.register(ClientCommandManager.literal("anchor").executes(context -> { anchorAura.toggle(); return 1; }));' >> src/main/java/com/rv/client/RVClient.java
           echo 'dispatcher.register(ClientCommandManager.literal("totem").executes(context -> { autoTotem.toggle(); return 1; }));' >> src/main/java/com/rv/client/RVClient.java
           echo 'dispatcher.register(ClientCommandManager.literal("miss").executes(context -> { autoMiss.toggle(); return 1; }));' >> src/main/java/com/rv/client/RVClient.java
+          echo 'dispatcher.register(ClientCommandManager.literal("trigger").executes(context -> { triggerBot.toggle(); return 1; }));' >> src/main/java/com/rv/client/RVClient.java
           echo '});' >> src/main/java/com/rv/client/RVClient.java
           echo 'ClientTickEvents.END_CLIENT_TICK.register(client -> {' >> src/main/java/com/rv/client/RVClient.java
           echo 'if (crystalAura.isEnabled()) crystalAura.onTick(client);' >> src/main/java/com/rv/client/RVClient.java
           echo 'if (anchorAura.isEnabled()) anchorAura.onTick(client);' >> src/main/java/com/rv/client/RVClient.java
           echo 'if (autoTotem.isEnabled()) autoTotem.onTick(client);' >> src/main/java/com/rv/client/RVClient.java
+          echo 'if (triggerBot.isEnabled()) triggerBot.onTick(client);' >> src/main/java/com/rv/client/RVClient.java
           echo '});' >> src/main/java/com/rv/client/RVClient.java
           echo '}' >> src/main/java/com/rv/client/RVClient.java
           echo '}' >> src/main/java/com/rv/client/RVClient.java
@@ -258,6 +261,38 @@ jobs:
           echo 'public boolean shouldMiss() { return Math.random() < missChance; }' >> src/main/java/com/rv/client/modules/AutoMiss.java
           echo '@Override public void onTick(MinecraftClient client) {}' >> src/main/java/com/rv/client/modules/AutoMiss.java
           echo '}' >> src/main/java/com/rv/client/modules/AutoMiss.java
+      - name: Write TriggerBot.java
+        run: |
+          echo 'package com.rv.client.modules;' > src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'import net.minecraft.client.MinecraftClient;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'import net.minecraft.entity.Entity;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'import net.minecraft.entity.LivingEntity;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'import net.minecraft.entity.player.PlayerEntity;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'import net.minecraft.entity.mob.HostileEntity;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'import net.minecraft.util.Hand;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'import net.minecraft.util.hit.EntityHitResult;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'import net.minecraft.util.hit.HitResult;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'public class TriggerBot extends Module {' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'private int delay = 0;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'private final int delayTicks = 3;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'public TriggerBot() { super("Trigger"); }' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo '@Override public void onTick(MinecraftClient client) {' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'if (client.player == null || client.world == null || client.interactionManager == null) return;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'if (client.currentScreen != null) return;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'if (delay > 0) { delay--; return; }' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'if (client.crosshairTarget == null) return;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'if (client.crosshairTarget.getType() != HitResult.Type.ENTITY) return;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'Entity target = ((EntityHitResult) client.crosshairTarget).getEntity();' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'if (!(target instanceof LivingEntity)) return;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'if (target == client.player) return;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'if (!((LivingEntity) target).isAlive()) return;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'if (!(target instanceof PlayerEntity) && !(target instanceof HostileEntity)) return;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'if (com.rv.client.RVClient.autoMiss.isEnabled() && com.rv.client.RVClient.autoMiss.shouldMiss()) { delay = delayTicks; return; }' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'client.interactionManager.attackEntity(client.player, target);' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'client.player.swingHand(Hand.MAIN_HAND);' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo 'delay = delayTicks;' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo '}' >> src/main/java/com/rv/client/modules/TriggerBot.java
+          echo '}' >> src/main/java/com/rv/client/modules/TriggerBot.java
       - name: Build
         run: gradle build --no-daemon --no-build-cache
       - name: Upload artifact
